@@ -22,17 +22,22 @@ namespace AlkemyChallenge.Controllers
         public IActionResult GetCharacters([FromQuery] string name, [FromQuery] int age = -1, [FromQuery] int movieId = -1)
         {
 
-            List<Character> characters; 
+            List<Character> characters = _dbContext.Characters.ToList(); 
             if(name != null)
             {
-                characters = _dbContext.Characters.Where(c => c.Name.Contains(name)).ToList();
-                if(characters.Count == 0)
-                {
-                    return NotFound();
-                }
+                characters = characters.Where(c => c.Name.Contains(name)).ToList();
+
             }
-            characters = _dbContext.Characters     
-                .ToList();
+            if(age >= 0)
+            {
+                characters = characters.Where(c => c.Age >= age).ToList();
+            }
+
+            if(movieId != -1)
+            {
+                var movie = _dbContext.Movies.Find(movieId);
+                characters = characters.Where(c => c.Movies.Equals(movie)).ToList();
+            }
             if (characters.Count == 0)
             {
                 return NotFound();
