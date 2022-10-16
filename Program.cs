@@ -7,12 +7,10 @@ using Microsoft.IdentityModel.Tokens;
 using System.Configuration;
 using System.Text;
 using AlkemyChallenge.Models;
-using AlkemyChallenge.Services.SendGrid;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-await Example.Execute();
 builder.Services.AddControllers();
 builder.Services.AddDbContext<DataContext>(options =>
 {
