@@ -1,108 +1,153 @@
 ﻿using System;
-using System.Collections.Generic;
+using Microsoft.AspNetCore.Authorization;
 using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using AlkemyChallenge.Data;
 using AlkemyChallenge.Models;
+using AlkemyChallenge.Data;
+using NHibernate.Util;
 
 namespace AlkemyChallenge.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("movies")]
     [ApiController]
+    [Authorize]
     public class MoviesController : ControllerBase
     {
-        private readonly DataContext _context;
-
+        private readonly DataContext _dbContext;
         public MoviesController(DataContext context)
         {
-            _context = context;
+            _dbContext = context;
         }
-
-        // GET: api/Movies
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Movie>>> GetMovies()
+        public IActionResult GetMovies([FromQuery] string name, [FromQuery] int genre = -1, [FromQuery] string order = "ASC")
         {
-            return await _context.Movies.ToListAsync();
-        }
+            List<Movie> movies = _dbContext.Movies.ToList();
+            if (name != null)
+            {
+                movies = movies.Where(m => m.Title.Contains(name)).ToList();
 
-        // GET: api/Movies/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Movie>> GetMovie(int id)
-        {
-            var movie = await _context.Movies.FindAsync(id);
+            }
+            if (order == "ASC")
+            {
+                movies = movies.OrderBy(m => m.Title).ToList();
+            }
+            if (order == "DESC")
+            {
+                movies = movies.OrderByDescending(m => m.Title).ToList();
+            }
 
-            if (movie == null)
+            if (genre != -1)
+            {
+                var genreObject = _dbContext.Genres.Find(genre);
+                movies = movies.Where(c => c.Genres.Equals(genreObject)).ToList();
+            }
+            if (movies.Count == 0)
             {
                 return NotFound();
             }
-
-            return movie;
-        }
-
-        // PUT: api/Movies/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutMovie(int id, Movie movie)
-        {
-            if (id != movie.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(movie).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!MovieExists(id))
+            return Ok(movies.Select(m =>
+                new
                 {
-                    return NotFound();
+                    title = m.Title,
+                    image = m.Img,
+                    date = m.Date
                 }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
+            ));
         }
 
-        // POST: api/Movies
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<Movie>> PostMovie(Movie movie)
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetById(int id)
         {
-            _context.Movies.Add(movie);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetMovie", new { id = movie.Id }, movie);
+            var movie = await _dbContext.Movies.Where(c => c.Id == id)
+                .Include(c => c.Genres)
+                .Include(c => c.Characters)
+                .FirstOrDefaultAsync();
+            if (movie == null)
+            {
+                return NotFound(
+                    new
+                    {
+                        Status = "Not found",
+                        Message = "No movies matches the id"
+                    });
+            }
+            return Ok(movie);
         }
 
-        // DELETE: api/Movies/5
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteMovie(int id)
         {
-            var movie = await _context.Movies.FindAsync(id);
+            var movie = await _dbContext.Movies.FindAsync(id);
             if (movie == null)
             {
-                return NotFound();
+                return NotFound(
+                    new
+                    {
+                        Status = "Not found",
+                        Message = "No movie matches the id"
+                    });
             }
-
-            _context.Movies.Remove(movie);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
+            try
+            {
+                _dbContext.Movies.Remove(movie);
+                return Ok();
+            }
+            catch
+            {
+                return StatusCode(500, new
+                {
+                    Status = "Internal error",
+                    Message = "Movie could not be deleted"
+                });
+            }
         }
-
-        private bool MovieExists(int id)
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateMovie(int id, Movie updatedMovie)
         {
-            return _context.Movies.Any(e => e.Id == id);
+            var movie = await _dbContext.Movies.FindAsync(id);
+            if (movie == null)
+            {
+                return NotFound(new
+                {
+                    Status = "Not found",
+                    Message = "No entity matches the id"
+                });
+            }
+            movie = updatedMovie;
+            try
+            {
+                _dbContext.SaveChanges();
+                return Ok();
+            }
+            catch
+            {
+                return StatusCode(500, new
+                {
+                    Status = "Internal error",
+                    Message = "Movie couldn't be updated"
+                });
+            }
         }
+        [HttpPost]
+        public async Task<ActionResult<List<Movie>>> PostMovie(Movie newMovie)
+        {
+            try
+            {
+                await _dbContext.Movies.AddAsync(newMovie);
+                await _dbContext.SaveChangesAsync();
+                return Ok();
+            }
+            catch
+            {
+                return StatusCode(500, new
+                {
+                    Status = "Internal error",
+                    Message = "Could not create Movie"
+                });
+            }
+        }
+
     }
 }

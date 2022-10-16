@@ -42,7 +42,13 @@ namespace AlkemyChallenge.Controllers
             {
                 return NotFound();
             }            
-            return Ok(characters);
+            return Ok(characters.Select(c =>
+                new
+                {
+                    image = c.Img,
+                    name = c.Name
+                }
+            ));
         }
 
         [HttpGet("{id}")]
